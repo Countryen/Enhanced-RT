@@ -238,6 +238,43 @@ ready('.vjs-upnext', function(element) {
 		if(document.cookie.indexOf("rt_access_token=") != -1)
 		{
 			// Get users Auto Play Next Video preference from server
+            chrome.runtime.sendMessage(
+                {contentScriptQuery: "getUsersAutoPlayNextVideoPref"},
+                (autoPlayNextVideoResponse, elementResponse) => { autoPlayNextVideo = autoPlayNextVideoResponse; element = elementResponse; console.log("getUsersAutoPlayNextVideoPref");}
+            );
+		}
+		else
+		{
+			// User not logged in, get preference from local storage
+			autoPlayNextVideo = ((localStorage.getItem("enhancedRT_autoPlayNextVideo") == null) ? "true" : localStorage.getItem("enhancedRT_autoPlayNextVideo"));
+			//console.log("Not logged in, get preference from local storage");
+			//console.log("Auto Play Next Video is " + autoPlayNextVideo);
+			
+			if(autoPlayNextVideo == "false")
+			{
+				// Stop next video auto play
+				element.childNodes[0].childNodes[0].childNodes[0].click();
+
+				// Delete next up div so it does not display
+				element.parentNode.removeChild(element);
+				//console.log("Auto Play Next Video has been killed");
+				//alert("Auto Play Next Video has been killed");
+			}
+		}
+	}
+});
+
+/*
+ready('.vjs-upnext', function(element) {
+	//console.log("Enhanced RT: Up Next Div Detected");
+	
+	// Ignore if it is the Up Next template Div
+	if(element.childNodes[0].childNodes[1].childNodes[0].href != "https://roosterteeth.com/")
+	{
+		// Only download Auto Play Next Video preference if user is logged in
+		if(document.cookie.indexOf("rt_access_token=") != -1)
+		{
+			// Get users Auto Play Next Video preference from server
 			var meXMLHttp = new XMLHttpRequest();
 			
 			meXMLHttp.onreadystatechange = function() {
@@ -312,7 +349,34 @@ ready('.vjs-upnext', function(element) {
 		}
 	}
 });
+*/
 
+ready('.error-page-wrapper', function(element) {
+	if(window.location.pathname.search("/watch/recently-added") >= 0)
+	{
+		//console.log("Enhanced RT: Recently Added Page Detected");
+		//console.log(element);
+		
+		// Remove 404 error
+		element.remove();
+		
+		
+		// Only check Auto Play Next Video preference if user is logged in
+		if(document.cookie.indexOf("rt_access_token=") != -1)
+		{
+			// Get users Auto Play Next Video preference from server
+      chrome.runtime.sendMessage(
+          {contentScriptQuery: "updateUsersAutoPlayNextVideoPreference"},
+          () => {console.log("updateUsersAutoPlayNextVideoPreference");}
+      );
+		}
+		
+		// Create Recently Added page
+		recentlyAdded();
+	}
+});
+
+/*
 ready('.error-page-wrapper', function(element) {
 	if(window.location.pathname.search("/watch/recently-added") >= 0)
 	{
@@ -347,7 +411,7 @@ ready('.error-page-wrapper', function(element) {
 		recentlyAdded();
 	}
 });
-
+*/
 ready('.percent-bar', function(element) {
 	if(window.location.pathname.search("/watch/recently-added") == -1 && window.location.pathname.search("/my-watchlist") == -1)
 	{
@@ -620,283 +684,271 @@ function recentlyAdded()
 	}
 
 	// Get List of Channels
-	var channelsXMLHttp = new XMLHttpRequest();
-	
-	channelsXMLHttp.onreadystatechange = function() {
-		if (this.readyState == 4 && this.status == 200) {
-			var channelsObj = JSON.parse(this.responseText);
-			
-			
-			for (var i = 0, len = channelsObj.data.length; i < len; i++)
-			{
-				//console.log("Name: " + channelsObj.data[i].attributes.name + " ID: " + channelsObj.data[i].uuid);
-				//channelArray[channelsObj.data[i].uuid] = "true";
+  chrome.runtime.sendMessage(
+    {contentScriptQuery: "getListOfChannels1"},
+    (channelsObj) => {
+      console.log("getListOfChannels1");
+      console.log(channelsObj);
+      for (var i = 0, len = channelsObj.data.length; i < len; i++)
+      {
+        //console.log("Name: " + channelsObj.data[i].attributes.name + " ID: " + channelsObj.data[i].uuid);
+        //channelArray[channelsObj.data[i].uuid] = "true";
 
-				logoFound = false;
-				
-				// Create channel and series filter elements
-				var channelSettingDiv = document.createElement("div");
-				channelSettingDiv.style.display = "inline-block";
-				channelSettingDiv.style.verticalAlign = "top";
-				
-				var channelFilterDiv = document.createElement("div");
-				channelFilterDiv.classList.add("js-enhancedrt-channel-logo");
-				channelFilterDiv.dataset.channelId = channelsObj.data[i].uuid;
-				channelFilterDiv.dataset.channelName = channelsObj.data[i].attributes.name;
+        logoFound = false;
+        
+        // Create channel and series filter elements
+        var channelSettingDiv = document.createElement("div");
+        channelSettingDiv.style.display = "inline-block";
+        channelSettingDiv.style.verticalAlign = "top";
+        
+        var channelFilterDiv = document.createElement("div");
+        channelFilterDiv.classList.add("js-enhancedrt-channel-logo");
+        channelFilterDiv.dataset.channelId = channelsObj.data[i].uuid;
+        channelFilterDiv.dataset.channelName = channelsObj.data[i].attributes.name;
 
-				var showSeriesDiv = document.createElement("div");
-				showSeriesDiv.style.marginRight = "20px";
-				showSeriesDiv.style.cursor = "pointer";
-				showSeriesDiv.title = "Show Series Filters";	
+        var showSeriesDiv = document.createElement("div");
+        showSeriesDiv.style.marginRight = "20px";
+        showSeriesDiv.style.cursor = "pointer";
+        showSeriesDiv.title = "Show Series Filters";	
 
-				var arrowDownIcon = document.createElement("i");
-				arrowDownIcon.classList.add("icon-keyboard_arrow_down");
-				arrowDownIcon.style.fontSize = "x-large";
-				
-				showSeriesDiv.appendChild(arrowDownIcon);
-				
-				
-				//Connect channel and series filter elements
-				channelSettingDiv.appendChild(channelFilterDiv);
-				channelSettingDiv.appendChild(showSeriesDiv);
-				headerDiv.appendChild(channelSettingDiv);
-				
-				// Display series filters
-				showSeriesDiv.onclick = function (event)
-				{
-					//console.log(event.currentTarget);
-					var seriesList = document.getElementsByClassName("js-enhancedrt-series-list");
-					for ( i = 0; i < seriesList.length; i++)
-					{
-						if(event.currentTarget.parentNode.children[0].dataset.channelId.indexOf(seriesList[i].dataset.channelId) != -1)
-						{
-							if(seriesList[i].style.display == "none")
-							{
-								seriesList[i].style.display = "";
-								event.currentTarget.children[0].className = "icon-keyboard_arrow_up";
-								event.currentTarget.children[0].title = "Hide Series Filters";
-							}
-							else
-							{
-								seriesList[i].style.display = "none";
-								event.currentTarget.children[0].className = "icon-keyboard_arrow_down";
-								event.currentTarget.children[0].title = "Show Series Filters";
-							}
-						}
-						else
-						{
-							seriesList[i].style.display = "none";
-							document.querySelector(".js-enhancedrt-channel-logo[data-channel-ID='" + seriesList[i].dataset.channelId + "'] + div > i").className = "icon-keyboard_arrow_down";
-							document.querySelector(".js-enhancedrt-channel-logo[data-channel-ID='" + seriesList[i].dataset.channelId + "'] + div > i").title = "Show Series Filters";
-						}
-					}
-				};
-				
-				
-				
-				// Determine if channel logos can be used instead of channel checkboxes. Logos should work on all browsers except Microsoft Edge.
-				if(CSS.supports("-webkit-mask-image", "url()"))
-				{
-					// Find channel color and logo URL
-					channelData.forEach(function(element) {
-						if(element.id == channelsObj.data[i].uuid)
-						{
-							
-							logoFound = true;
+        var arrowDownIcon = document.createElement("i");
+        arrowDownIcon.classList.add("icon-keyboard_arrow_down");
+        arrowDownIcon.style.fontSize = "x-large";
+        
+        showSeriesDiv.appendChild(arrowDownIcon);
+        
+        
+        //Connect channel and series filter elements
+        channelSettingDiv.appendChild(channelFilterDiv);
+        channelSettingDiv.appendChild(showSeriesDiv);
+        headerDiv.appendChild(channelSettingDiv);
+        
+        // Display series filters
+        showSeriesDiv.onclick = function (event)
+        {
+          //console.log(event.currentTarget);
+          var seriesList = document.getElementsByClassName("js-enhancedrt-series-list");
+          for ( i = 0; i < seriesList.length; i++)
+          {
+            if(event.currentTarget.parentNode.children[0].dataset.channelId.indexOf(seriesList[i].dataset.channelId) != -1)
+            {
+              if(seriesList[i].style.display == "none")
+              {
+                seriesList[i].style.display = "";
+                event.currentTarget.children[0].className = "icon-keyboard_arrow_up";
+                event.currentTarget.children[0].title = "Hide Series Filters";
+              }
+              else
+              {
+                seriesList[i].style.display = "none";
+                event.currentTarget.children[0].className = "icon-keyboard_arrow_down";
+                event.currentTarget.children[0].title = "Show Series Filters";
+              }
+            }
+            else
+            {
+              seriesList[i].style.display = "none";
+              document.querySelector(".js-enhancedrt-channel-logo[data-channel-ID='" + seriesList[i].dataset.channelId + "'] + div > i").className = "icon-keyboard_arrow_down";
+              document.querySelector(".js-enhancedrt-channel-logo[data-channel-ID='" + seriesList[i].dataset.channelId + "'] + div > i").title = "Show Series Filters";
+            }
+          }
+        };
+        
+        
+        
+        // Determine if channel logos can be used instead of channel checkboxes. Logos should work on all browsers except Microsoft Edge.
+        if(CSS.supports("-webkit-mask-image", "url()"))
+        {
+          // Find channel color and logo URL
+          channelData.forEach(function(element) {
+            if(element.id == channelsObj.data[i].uuid)
+            {
+              
+              logoFound = true;
 
 
-							channelFilterDiv.dataset.channelColor = element.color;
-							channelFilterDiv.dataset.channelLogo = element.logo;
-							arrowDownIcon.style.color = "#" + channelFilterDiv.dataset.channelColor;
-							
-							channelFilterDiv.title = ((channelFilter.indexOf(channelsObj.data[i].uuid) == -1) ? "Hide " : "Show ") + channelFilterDiv.dataset.channelName;
-							channelFilterDiv.style = "display:inline-block; cursor: pointer; width: 40px; height: 40px; margin-right: 20px; -webkit-mask-image: url('" + channelFilterDiv.dataset.channelLogo + "'); -webkit-mask-size: 100% 100%;"
-							if(channelFilter.indexOf(channelsObj.data[i].uuid) == -1)
-							{
-								channelFilterDiv.title = "Hide " + channelFilterDiv.dataset.channelName;
-								channelFilterDiv.style.backgroundColor = "#" + channelFilterDiv.dataset.channelColor;
-								channelFilterDiv.style.opacity = 1;
-							}
-							else
-							{
-								channelFilterDiv.title = "Show " + channelFilterDiv.dataset.channelName;
-								channelFilterDiv.style.backgroundColor = "gray";
-								channelFilterDiv.style.opacity = 0.5;
-							}
+              channelFilterDiv.dataset.channelColor = element.color;
+              channelFilterDiv.dataset.channelLogo = element.logo;
+              arrowDownIcon.style.color = "#" + channelFilterDiv.dataset.channelColor;
+              
+              channelFilterDiv.title = ((channelFilter.indexOf(channelsObj.data[i].uuid) == -1) ? "Hide " : "Show ") + channelFilterDiv.dataset.channelName;
+              channelFilterDiv.style = "display:inline-block; cursor: pointer; width: 40px; height: 40px; margin-right: 20px; -webkit-mask-image: url('" + channelFilterDiv.dataset.channelLogo + "'); -webkit-mask-size: 100% 100%;"
+              if(channelFilter.indexOf(channelsObj.data[i].uuid) == -1)
+              {
+                channelFilterDiv.title = "Hide " + channelFilterDiv.dataset.channelName;
+                channelFilterDiv.style.backgroundColor = "#" + channelFilterDiv.dataset.channelColor;
+                channelFilterDiv.style.opacity = 1;
+              }
+              else
+              {
+                channelFilterDiv.title = "Show " + channelFilterDiv.dataset.channelName;
+                channelFilterDiv.style.backgroundColor = "gray";
+                channelFilterDiv.style.opacity = 0.5;
+              }
 
-							
-							channelFilterDiv.onclick = function (event)
-							{
-								if(event.target.style.backgroundColor == "gray")
-								{
-									event.target.style.backgroundColor = "#" + event.target.dataset.channelColor;
-									event.target.style.opacity = 1;
-									event.target.title = "Hide " + event.target.dataset.channelName;
-									if (channelFilter.indexOf(event.target.dataset.channelId) != -1) {
-										channelFilter.splice(channelFilter.indexOf(event.target.dataset.channelId), 1);
-									}
-									localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
-								}
-								else if(event.target.style.backgroundColor != "gray")
-								{
-									event.target.style.backgroundColor = "gray";
-									event.target.style.opacity = 0.5;
-									event.target.title = "Show " + event.target.dataset.channelName;
-									if (channelFilter.indexOf(event.target.dataset.channelId) == -1) {
-										channelFilter.push(event.target.dataset.channelId)
-									}
-									localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
-								}
-								
-								hideVideos();
-								checkForEndlessTrigger();
-							};
+              
+              channelFilterDiv.onclick = function (event)
+              {
+                if(event.target.style.backgroundColor == "gray")
+                {
+                  event.target.style.backgroundColor = "#" + event.target.dataset.channelColor;
+                  event.target.style.opacity = 1;
+                  event.target.title = "Hide " + event.target.dataset.channelName;
+                  if (channelFilter.indexOf(event.target.dataset.channelId) != -1) {
+                    channelFilter.splice(channelFilter.indexOf(event.target.dataset.channelId), 1);
+                  }
+                  localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
+                }
+                else if(event.target.style.backgroundColor != "gray")
+                {
+                  event.target.style.backgroundColor = "gray";
+                  event.target.style.opacity = 0.5;
+                  event.target.title = "Show " + event.target.dataset.channelName;
+                  if (channelFilter.indexOf(event.target.dataset.channelId) == -1) {
+                    channelFilter.push(event.target.dataset.channelId)
+                  }
+                  localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
+                }
+                
+                hideVideos();
+                checkForEndlessTrigger();
+                
+                
+              };
 
-						}
-					});
-					
-					
-				}
-				
-				// Default to checkbox if no logo found or logo image mask not supported
-				if(!logoFound)
-				{
-					
-					channelFilterDiv.style.height = "46px";
-					
-					var channelLabel = document.createElement("label");
-					channelLabel.style = "font-size: 1.64rem; margin-right: 10px;";
-					channelLabel.style.cursor = "pointer";
-					channelLabel.title = ((channelFilter.indexOf(channelsObj.data[i].uuid) == -1) ? "Hide " + channelsObj.data[i].attributes.name : "Show " + channelsObj.data[i].attributes.name);
-					var channelCheckbox = document.createElement("input");
-					channelCheckbox.type = "checkbox";
-					channelCheckbox.id = channelsObj.data[i].uuid;
-					channelCheckbox.defaultChecked = ((channelFilter.indexOf(channelsObj.data[i].uuid) == -1) ? true : false);
-					channelCheckbox.style = "position: static; opacity: 100; pointer-events:auto; width: 17px; height: 17px; margin-left: 5px;";
-					channelCheckbox.style.cursor = "pointer";
-					channelLabel.appendChild(channelCheckbox);
-					channelLabel.appendChild(document.createTextNode(channelsObj.data[i].attributes.name));
-					
-					channelFilterDiv.appendChild(channelLabel);
+            }
+          });
+          
+          
+        }
+        
+        // Default to checkbox if no logo found or logo image mask not supported
+        if(!logoFound)
+        {
+          
+          channelFilterDiv.style.height = "46px";
+          
+          var channelLabel = document.createElement("label");
+          channelLabel.style = "font-size: 1.64rem; margin-right: 10px;";
+          channelLabel.style.cursor = "pointer";
+          channelLabel.title = ((channelFilter.indexOf(channelsObj.data[i].uuid) == -1) ? "Hide " + channelsObj.data[i].attributes.name : "Show " + channelsObj.data[i].attributes.name);
+          var channelCheckbox = document.createElement("input");
+          channelCheckbox.type = "checkbox";
+          channelCheckbox.id = channelsObj.data[i].uuid;
+          channelCheckbox.defaultChecked = ((channelFilter.indexOf(channelsObj.data[i].uuid) == -1) ? true : false);
+          channelCheckbox.style = "position: static; opacity: 100; pointer-events:auto; width: 17px; height: 17px; margin-left: 5px;";
+          channelCheckbox.style.cursor = "pointer";
+          channelLabel.appendChild(channelCheckbox);
+          channelLabel.appendChild(document.createTextNode(channelsObj.data[i].attributes.name));
+          
+          channelFilterDiv.appendChild(channelLabel);
 
-					
-					channelCheckbox.onclick = function (event)
-					{
-						if(event.target.checked == true)
-						{
-							//console.log("onclick checked: " + event.target.checked);
-							if (channelFilter.indexOf(event.target.id) != -1) {
-								channelFilter.splice(channelFilter.indexOf(event.target.id), 1);
-							}
-							localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
-							event.target.parentNode.title = "Hide " + event.target.parentNode.textContent;
-						}
-						else if(event.target.checked == false)
-						{
-							//console.log("onclick unchecked: " + event.target.checked);
-							if (channelFilter.indexOf(event.target.id) == -1) {
-								channelFilter.push(event.target.id)
-							}
-							localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
-							event.target.parentNode.title = "Show " + event.target.parentNode.textContent;
-						}
-						
-						hideVideos();
-						checkForEndlessTrigger();
-					};
-					
-				}
-				
-				
-				
+          
+          channelCheckbox.onclick = function (event)
+          {
+            if(event.target.checked == true)
+            {
+              //console.log("onclick checked: " + event.target.checked);
+              if (channelFilter.indexOf(event.target.id) != -1) {
+                channelFilter.splice(channelFilter.indexOf(event.target.id), 1);
+              }
+              localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
+              event.target.parentNode.title = "Hide " + event.target.parentNode.textContent;
+            }
+            else if(event.target.checked == false)
+            {
+              //console.log("onclick unchecked: " + event.target.checked);
+              if (channelFilter.indexOf(event.target.id) == -1) {
+                channelFilter.push(event.target.id)
+              }
+              localStorage.setItem("enhancedRT_channelFilter", JSON.stringify(channelFilter));
+              event.target.parentNode.title = "Show " + event.target.parentNode.textContent;
+            }
+            
+            hideVideos();
+            checkForEndlessTrigger();
+          };
+          
+        }
+        
+        
+        
 
-				
-				// Get series that belong to this channel
-				var seriesXMLHttp = new XMLHttpRequest();
-				
-				seriesXMLHttp.onreadystatechange = function()
-				{
-					if (this.readyState == 4 && this.status == 200)
-					{
-						var seriesObj = JSON.parse(this.responseText);
-						
-						var seriesDiv = document.createElement("div");
-						seriesDiv.className = "js-enhancedrt-series-list";
-						seriesDiv.style.display = "none";
-						seriesDiv.dataset.channelId = seriesObj.data[1].attributes.channel_id;
+        // Get series that belong to this channel
+        chrome.runtime.sendMessage(
+          {contentScriptQuery: "getListOfChannels2", channelSlug: channelsObj.data[i].attributes.slug},
+          (seriesObj) => {
+            console.log("getListOfChannels2");
+            console.log(seriesObj);
+            
+            var seriesDiv = document.createElement("div");
+            seriesDiv.className = "js-enhancedrt-series-list";
+            seriesDiv.style.display = "none";
+            seriesDiv.dataset.channelId = seriesObj.data[1].attributes.channel_id;
 
-						seriesDiv.style.textAlign = "left";
-						seriesDiv.style.margin = "20px 4%";
-						
-						for (var i = 0, len = seriesObj.data.length; i < len; i++)
-						{
-							//console.log("Series name: " + seriesObj.data[i].attributes.title + " ID: " + seriesObj.data[i].uuid);
+            seriesDiv.style.textAlign = "left";
+            seriesDiv.style.margin = "20px 4%";
+            
+            for (var i = 0, len = seriesObj.data.length; i < len; i++)
+            {
+              //console.log("Series name: " + seriesObj.data[i].attributes.title + " ID: " + seriesObj.data[i].uuid);
 
-							var seriesLabel = document.createElement("label");
-							seriesLabel.style = "font-size: 1.64rem; margin-right: 10px;";
-							seriesLabel.style = "margin-bottom: 5px; margin-right: 10px; width: 16%";
-							seriesLabel.style.display = "inline-block";
-							seriesLabel.style.whiteSpace = "nowrap";
-							seriesLabel.style.overflow = "hidden";
-							seriesLabel.style.textOverflow = "ellipsis";
-							seriesLabel.style.cursor = "pointer";
-							seriesLabel.title = ((seriesFilter.indexOf(seriesObj.data[i].uuid) == -1) ? "Hide " + seriesObj.data[i].attributes.title : "Show " + seriesObj.data[i].attributes.title);
-							//seriesLabel.style.textAlign = "left";
-							var seriesCheckbox = document.createElement("input");
-							seriesCheckbox.type = "checkbox";
-							seriesCheckbox.id = seriesObj.data[i].uuid;
-							seriesCheckbox.defaultChecked = ((seriesFilter.indexOf(seriesObj.data[i].uuid) == -1) ? true : false);
-							seriesCheckbox.style = "position: static; opacity: 100; pointer-events:auto; width: 17px; height: 17px; margin-left: 5px;";
-							seriesCheckbox.style.verticalAlign = "top";
-							seriesCheckbox.style.cursor = "pointer";
-							seriesLabel.appendChild(seriesCheckbox);
-							seriesLabel.appendChild(document.createTextNode(seriesObj.data[i].attributes.title));
-							
-							seriesDiv.appendChild(seriesLabel);
-							
-							seriesCheckbox.onclick = function (event)
-							{
-								if(event.target.checked == true)
-								{
-									//console.log("onclick checked: " + event.target.checked);
-									if (seriesFilter.indexOf(event.target.id) != -1) {
-										seriesFilter.splice(seriesFilter.indexOf(event.target.id), 1);
-									}
-									localStorage.setItem("enhancedRT_seriesFilter", JSON.stringify(seriesFilter));
-									event.target.parentNode.title = "Hide " + event.target.parentNode.textContent;
-								}
-								else if(event.target.checked == false)
-								{
-									//console.log("onclick unchecked: " + event.target.checked);
-									if (seriesFilter.indexOf(event.target.id) == -1) {
-										seriesFilter.push(event.target.id)
-									}
-									localStorage.setItem("enhancedRT_seriesFilter", JSON.stringify(seriesFilter));
-									event.target.parentNode.title = "Show " + event.target.parentNode.textContent;
-								}
-								
-								hideVideos();
-								checkForEndlessTrigger();
-							};
-							
-						}
-						
-						headerDiv.appendChild(seriesDiv);
+              var seriesLabel = document.createElement("label");
+              seriesLabel.style = "font-size: 1.64rem; margin-right: 10px;";
+              seriesLabel.style = "margin-bottom: 5px; margin-right: 10px; width: 16%";
+              seriesLabel.style.display = "inline-block";
+              seriesLabel.style.whiteSpace = "nowrap";
+              seriesLabel.style.overflow = "hidden";
+              seriesLabel.style.textOverflow = "ellipsis";
+              seriesLabel.style.cursor = "pointer";
+              seriesLabel.title = ((seriesFilter.indexOf(seriesObj.data[i].uuid) == -1) ? "Hide " + seriesObj.data[i].attributes.title : "Show " + seriesObj.data[i].attributes.title);
+              //seriesLabel.style.textAlign = "left";
+              var seriesCheckbox = document.createElement("input");
+              seriesCheckbox.type = "checkbox";
+              seriesCheckbox.id = seriesObj.data[i].uuid;
+              seriesCheckbox.defaultChecked = ((seriesFilter.indexOf(seriesObj.data[i].uuid) == -1) ? true : false);
+              seriesCheckbox.style = "position: static; opacity: 100; pointer-events:auto; width: 17px; height: 17px; margin-left: 5px;";
+              seriesCheckbox.style.verticalAlign = "top";
+              seriesCheckbox.style.cursor = "pointer";
+              seriesLabel.appendChild(seriesCheckbox);
+              seriesLabel.appendChild(document.createTextNode(seriesObj.data[i].attributes.title));
+              
+              seriesDiv.appendChild(seriesLabel);
+              
+              seriesCheckbox.onclick = function (event)
+              {
+                if(event.target.checked == true)
+                {
+                  //console.log("onclick checked: " + event.target.checked);
+                  if (seriesFilter.indexOf(event.target.id) != -1) {
+                    seriesFilter.splice(seriesFilter.indexOf(event.target.id), 1);
+                  }
+                  localStorage.setItem("enhancedRT_seriesFilter", JSON.stringify(seriesFilter));
+                  event.target.parentNode.title = "Hide " + event.target.parentNode.textContent;
+                }
+                else if(event.target.checked == false)
+                {
+                  //console.log("onclick unchecked: " + event.target.checked);
+                  if (seriesFilter.indexOf(event.target.id) == -1) {
+                    seriesFilter.push(event.target.id)
+                  }
+                  localStorage.setItem("enhancedRT_seriesFilter", JSON.stringify(seriesFilter));
+                  event.target.parentNode.title = "Show " + event.target.parentNode.textContent;
+                }
+                
+                hideVideos();
+                checkForEndlessTrigger();
+              };
+              
+            }
+            
+            headerDiv.appendChild(seriesDiv);
 
-					}
-				}
-
-				// Request series list from server
-				seriesXMLHttp.open("GET", "https://svod-be.roosterteeth.com/api/v1/channels/" + channelsObj.data[i].attributes.slug + "/shows", true);
-				seriesXMLHttp.send();
-
-			}
-		}
-	};
-
-	// Request channels list from server
-	channelsXMLHttp.open("GET", "https://svod-be.roosterteeth.com/api/v1/channels", true);
-	channelsXMLHttp.send();
+          }
+        );
+      }
+    }
+  );
 
 
 	// ***Filters Setup End***
@@ -936,7 +988,7 @@ function recentlyAdded()
 	
 	showMoreDiv.onclick = function (event)
 	{
-		getEpisodes(xmlhttp, episodePage, episodesPerPage);
+		getEpisodes(getWatchTimes, channelData, episodeDiv, episodeBatch, episodePage, episodesPerPage);
 		episodePage++;
 		hideVideos();
 		//checkForEndlessTrigger();
@@ -1033,21 +1085,188 @@ function recentlyAdded()
 	var episodeBatch = "";
 	var episodeData = new Object();
 	
-	// Get List of Episodes
-	var xmlhttp = new XMLHttpRequest();
+
 	/*
 	xmlhttp.status = function() {
 		console.log();
 		
 	}
 	*/
+  	
+	// Get initial set of episodes
+	getEpisodes(getWatchTimes, channelData, episodeDiv, episodeBatch, episodePage, episodesPerPage);
+	episodePage++;
+  
+
+	function getWatchTimes(episodeData, episodeBatch)
+	{
+    // Only get watch times if access token exists
+		if(document.cookie.indexOf("rt_access_token=") != -1)
+		{
+      // Retrieve rt_access_token from document.cookie
+			var tokenLocation = document.cookie.indexOf("rt_access_token=") + 16;
+			var accessToken = document.cookie.substring(tokenLocation, document.cookie.indexOf(";", tokenLocation));
+      
+      chrome.runtime.sendMessage(
+        {contentScriptQuery: "getWatchTimes", accessToken: accessToken, episodeBatch: episodeBatch},
+        (watchTimeObj) => {
+          console.log("getWatchTimes");
+          console.log(watchTimeObj);
+        
+          for (var i = 0; i < watchTimeObj.length; i++)
+          {
+            for (var j = 0; j < episodeData.data.length; j++)
+            {
+              if(episodeData.data[j].uuid == watchTimeObj[i].uuid)
+              {
+                // Create Watched/Resume label
+                var WatchedDiv = document.createElement("div");
+                WatchedDiv.className = "timestamp";
+                WatchedDiv.style.top = "0%";
+                WatchedDiv.style.left = "0%";
+                WatchedDiv.style.right = "auto";
+                WatchedDiv.style.bottom = "auto";
+                WatchedDiv.style.fontSize = "1rem";
+                
+                if(watchTimeObj[i].value > episodeData.data[j].attributes.length - watchedThreshold)
+                {
+                  // Set Watched label text
+                  WatchedDiv.appendChild(document.createTextNode("Watched"));
+                  
+                  document.querySelector("[data-episode-id='"+watchTimeObj[i].uuid+"']").dataset.watched = "true";
+                  
+                  //console.log("Episode " + episodeData.data[j].attributes.display_title + " is watched. It is " + episodeData.data[j].attributes.length + " seconds long and watch time is " + watchTimeObj[i].value + " seconds.");
+                }
+                else // There is a watch time but it is not within the watched threshold
+                {
+                  // Set Resume label text
+                  var watchedLength = seconds2Timestamp(watchTimeObj[i].value);
+                  WatchedDiv.appendChild(document.createTextNode("Resume from " + ((watchedLength.hours == 0) ? watchedLength.minutes : watchedLength.hours + ":" + ('0'+watchedLength.minutes).slice(-2)) +':'+ ('0'+watchedLength.seconds).slice(-2)));
+                  
+                  var PercentDiv = document.createElement("div");
+                  PercentDiv.className = "percent-bar";
+                  var ProgressDiv = document.createElement("div");
+                  ProgressDiv.className = "progress";
+                  var DeterminateDiv = document.createElement("div");
+                  DeterminateDiv.className = "determinate";
+                  DeterminateDiv.style.width = "" + (Math.round((Math.trunc(watchTimeObj[i].value) / episodeData.data[j].attributes.length) * 1000000) / 10000) + "%";
+                  
+                  ProgressDiv.appendChild(DeterminateDiv);
+                  PercentDiv.appendChild(ProgressDiv);
+                  
+                  document.querySelector("[data-episode-id='"+watchTimeObj[i].uuid+"']").childNodes[0].childNodes[0].childNodes[0].appendChild(PercentDiv);
+                }
+
+                // Append Watched/Resume label
+                document.querySelector("[data-episode-id='"+watchTimeObj[i].uuid+"']").childNodes[0].childNodes[0].childNodes[0].childNodes[0].appendChild(WatchedDiv);
+
+              }
+            }
+          }
+
+          // Reset in preparation for next batch
+          episodeData = {};
+          
+          // Need to do hideVideos again after watched status is determined
+          hideVideos();
+        }
+      );
+		}
+	}
 	
+	
+	
+	// *********************
+	// Endless Video Loading
+	// *********************
+	
+	
+	// Setup scroll listener
+	
+	
+	/*document.addEventListener("scroll", function (event)
+	{
+		console.log("Scrolling");
 
-	xmlhttp.onreadystatechange = function() {
-		if (this.readyState == 4 && this.status == 200) {
+		checkForEndlessTrigger();
+	});
+	
+	window.onscroll=window.onresize= check;
+	document.addEventListener("wheel", function (e) {
 
-			// Episode list
-			var myObj = JSON.parse(this.responseText);
+		check();
+		
+	}, true);
+	
+	function check()
+	{
+		console.log("Scrolling");
+
+	}
+	*/
+	
+	
+	/*
+	var observer = new IntersectionObserver((entries, observer) => {
+		entries.forEach(entry => {
+		  //callback(entry.intersectionRatio > 0);
+		  console.log("Show More Visible");
+		});
+	  }, options);
+
+	  var options = {root: document.documentElement}
+	  observer.observe(showMoreDiv);
+
+	
+	// Don't load a new page if already loading one.
+	var endlessLoadingInProgress = 0;
+	
+	// Number of pages loaded without a break
+	var endlessPagesLoaded = 1;
+	
+	// Is loading paused?
+	var loadingPaused = 0;
+	*/
+	
+	checkForEndlessTrigger = function()
+	{
+		/*
+		console.log("checkForEndlessTrigger");
+		//var endlessFrameHTML = document.getElementsByClassName("pagination")[0];
+		//if(endlessFrameHTML == undefined){return;}
+		//var endlessOffset = endlessFrameHTML.offsetTop + endlessFrameHTML.clientHeight;
+		var endlessOffset = showMoreDiv.offsetTop + showMoreDiv.clientHeight;
+		var pageOffset = window.pageYOffset + window.innerHeight;
+		
+		// Check if scrolled low enough to load more videos
+		if(pageOffset > (endlessOffset - 100) && endlessVideos == 1)
+		{
+			//console.log("EndlessTriggered");
+			
+		}
+		*/
+	};
+	
+	//checkForEndlessTrigger();
+}
+
+
+
+
+function getEpisodes(getWatchTimes, channelData, episodeDiv, episodeBatch, episodePage, episodesPerPage)
+{
+	//Make sure you can't request more episodes if a request is already in progress.
+	//Make sure you can't keep loading past the last page of videos available.
+	//Make Loading Animation, possibly the orange loading circle used on the Beta site.
+	// Stop loading every 10 pages and show button to load more
+	
+	// Request episodes list from server
+  chrome.runtime.sendMessage(
+    {contentScriptQuery: "getListOfEpisodes", episodePage: episodePage, episodesPerPage: episodesPerPage},
+    (myObj) => {
+      console.log("getListOfEpisodes");
+      console.log(myObj);
+
 			episodeData = myObj;
 
 			// Parse episodes in list
@@ -1141,193 +1360,13 @@ function recentlyAdded()
 			}
 
 			// Get watch times for current episode batch
-			getWatchTimes(watchTimeXMLHttp, episodeBatch);
+			getWatchTimes(episodeData, episodeBatch);
 			// Reset in preparation for next batch
 			episodeBatch = "";
 
-			hideVideos();
-			
-		}
-	};
-	
-	// Get initial set of episodes
-	getEpisodes(xmlhttp, episodePage, episodesPerPage);
-	episodePage++;
-	
-	
-	
-	// Request episode watch times from Watch Time Collector (wtc) server.
-	var watchTimeXMLHttp = new XMLHttpRequest();
-	
-	watchTimeXMLHttp.onreadystatechange = function() {
-		if (this.readyState == 4 && this.status == 200) {
-			var watchTimeObj = JSON.parse(this.responseText);
-
-			for (var i = 0; i < watchTimeObj.length; i++)
-			{
-				for (var j = 0; j < episodeData.data.length; j++)
-				{
-					if(episodeData.data[j].uuid == watchTimeObj[i].uuid)
-					{
-						// Create Watched/Resume label
-						var WatchedDiv = document.createElement("div");
-						WatchedDiv.className = "timestamp";
-						WatchedDiv.style.top = "0%";
-						WatchedDiv.style.left = "0%";
-						WatchedDiv.style.right = "auto";
-						WatchedDiv.style.bottom = "auto";
-						WatchedDiv.style.fontSize = "1rem";
-						
-						if(watchTimeObj[i].value > episodeData.data[j].attributes.length - watchedThreshold)
-						{
-							// Set Watched label text
-							WatchedDiv.appendChild(document.createTextNode("Watched"));
-							
-							document.querySelector("[data-episode-id='"+watchTimeObj[i].uuid+"']").dataset.watched = "true";
-							
-							//console.log("Episode " + episodeData.data[j].attributes.display_title + " is watched. It is " + episodeData.data[j].attributes.length + " seconds long and watch time is " + watchTimeObj[i].value + " seconds.");
-						}
-						else // There is a watch time but it is not within the watched threshold
-						{
-							// Set Resume label text
-							var watchedLength = seconds2Timestamp(watchTimeObj[i].value);
-							WatchedDiv.appendChild(document.createTextNode("Resume from " + ((watchedLength.hours == 0) ? watchedLength.minutes : watchedLength.hours + ":" + ('0'+watchedLength.minutes).slice(-2)) +':'+ ('0'+watchedLength.seconds).slice(-2)));
-							
-							var PercentDiv = document.createElement("div");
-							PercentDiv.className = "percent-bar";
-							var ProgressDiv = document.createElement("div");
-							ProgressDiv.className = "progress";
-							var DeterminateDiv = document.createElement("div");
-							DeterminateDiv.className = "determinate";
-							DeterminateDiv.style.width = "" + (Math.round((Math.trunc(watchTimeObj[i].value) / episodeData.data[j].attributes.length) * 1000000) / 10000) + "%";
-							
-							ProgressDiv.appendChild(DeterminateDiv);
-							PercentDiv.appendChild(ProgressDiv);
-							
-							document.querySelector("[data-episode-id='"+watchTimeObj[i].uuid+"']").childNodes[0].childNodes[0].childNodes[0].appendChild(PercentDiv);
-						}
-
-						// Append Watched/Resume label
-						document.querySelector("[data-episode-id='"+watchTimeObj[i].uuid+"']").childNodes[0].childNodes[0].childNodes[0].childNodes[0].appendChild(WatchedDiv);
-
-					}
-				}
-			}
-
-			// Reset in preparation for next batch
-			episodeData = {};
-			
-			// Need to do hideVideos again after watched status is determined
-			hideVideos();
-		}
-	};
-	
-	
-	function getWatchTimes(watchTimeXMLHttp, episodeBatch)
-	{
-		// Only get watch times if access token exists
-		if(document.cookie.indexOf("rt_access_token=") != -1)
-		{
-			// Retrieve rt_access_token from document.cookie
-			var tokenLocation = document.cookie.indexOf("rt_access_token=") + 16;
-			var accessToken = document.cookie.substring(tokenLocation, document.cookie.indexOf(";", tokenLocation));
-			
-			// Request watch times for current episode batch
-			watchTimeXMLHttp.open("GET", "https://wtcg.roosterteeth.com/api/v1/my/played_positions/mget/" + episodeBatch, true);
-			watchTimeXMLHttp.setRequestHeader('Authorization', 'Bearer ' + accessToken);
-			watchTimeXMLHttp.send();
-		}
-	}
-	
-	
-	
-	// *********************
-	// Endless Video Loading
-	// *********************
-	
-	
-	// Setup scroll listener
-	
-	
-	/*document.addEventListener("scroll", function (event)
-	{
-		console.log("Scrolling");
-
-		checkForEndlessTrigger();
-	});
-	
-	window.onscroll=window.onresize= check;
-	document.addEventListener("wheel", function (e) {
-
-		check();
-		
-	}, true);
-	
-	function check()
-	{
-		console.log("Scrolling");
-
-	}
-	*/
-	
-	
-	/*
-	var observer = new IntersectionObserver((entries, observer) => {
-		entries.forEach(entry => {
-		  //callback(entry.intersectionRatio > 0);
-		  console.log("Show More Visible");
-		});
-	  }, options);
-
-	  var options = {root: document.documentElement}
-	  observer.observe(showMoreDiv);
-
-	
-	// Don't load a new page if already loading one.
-	var endlessLoadingInProgress = 0;
-	
-	// Number of pages loaded without a break
-	var endlessPagesLoaded = 1;
-	
-	// Is loading paused?
-	var loadingPaused = 0;
-	*/
-	
-	checkForEndlessTrigger = function()
-	{
-		/*
-		console.log("checkForEndlessTrigger");
-		//var endlessFrameHTML = document.getElementsByClassName("pagination")[0];
-		//if(endlessFrameHTML == undefined){return;}
-		//var endlessOffset = endlessFrameHTML.offsetTop + endlessFrameHTML.clientHeight;
-		var endlessOffset = showMoreDiv.offsetTop + showMoreDiv.clientHeight;
-		var pageOffset = window.pageYOffset + window.innerHeight;
-		
-		// Check if scrolled low enough to load more videos
-		if(pageOffset > (endlessOffset - 100) && endlessVideos == 1)
-		{
-			//console.log("EndlessTriggered");
-			
-		}
-		*/
-	};
-	
-	//checkForEndlessTrigger();
-}
-
-
-
-
-function getEpisodes(xmlhttp, episodePage, episodesPerPage)
-{
-	//Make sure you can't request more episodes if a request is already in progress.
-	//Make sure you can't keep loading past the last page of videos available.
-	//Make Loading Animation, possibly the orange loading circle used on the Beta site.
-	// Stop loading every 10 pages and show button to load more
-	
-	// Request episodes list from server
-	xmlhttp.open("GET", "https://svod-be.roosterteeth.com/api/v1/episodes?page=" + episodePage + "&per_page=" + episodesPerPage, true);
-	xmlhttp.send();
+			hideVideos();      
+    }
+  );
 }
 
 
